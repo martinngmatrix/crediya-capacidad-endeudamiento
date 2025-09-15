@@ -1,0 +1,47 @@
+service: debt-capacity-service
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource:
+            - !GetAtt SolicitudesRequestsQueue.Arn
+            - !GetAtt SolicitudesResponsesQueue.Arn
+
+functions:
+  calculateCapacity:
+    handler: handler.handler
+    environment:
+      RESPONSE_QUEUE_URL: !Ref SolicitudesResponsesQueue
+    events:
+      - sqs:
+          arn: !GetAtt SolicitudesRequestsQueue.Arn
+
+resources:
+  Resources:
+    SolicitudesDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: solicitudes-dlq
+    SolicitudesRequestsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: solicitudes-requests
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt SolicitudesDLQ.Arn
+          maxReceiveCount: 3
+    SolicitudesResponsesQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: solicitudes-responses
